@@ -1,0 +1,50 @@
+name: Continuous Deployment & Monitoring (Self-Hosted)
+
+on:
+  # This makes this workflow trigger automatically only AFTER the CI pipeline finishes successfully
+  workflow_run:
+    workflows: ["Continuous Integration (GitHub-Hosted)"]
+    types:
+      - completed
+
+jobs:
+  deploy-and-monitor:
+    # CRUCIAL: This tells GitHub to ignore its own cloud runners and send this job straight to your EC2 instance!
+    runs-on: self-hosted
+    
+    # Only run this if the CI pipeline actually succeeded
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Downcase Repo Name
+      id: string
+      run: |
+        echo "repo_lower=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
+
+    # Step 4: Stop and clean up any old version of the app running on the EC2 instance
+    - name: Clean up existing container
+      run: |
+        docker stop my-hybrid-app || true
+        docker rm my-hybrid-app || true
+
+    # Step 5: Pull the fresh image from the warehouse and run it on Port 8080
+    - name: Deploy Application to Docker
+      run: |
+        docker pull ghcr.io/${{ steps.string.outputs.repo_lower }}:latest
+        docker run -d --name my-hybrid-app -p 8080:8080 ghcr.io/${{ steps.string.outputs.repo_lower }}:latest
+
+    # Step 6: Execute our system monitoring script right on the host
+    - name: Run Infrastructure Health Check
+      run: |
+        chmod +x monitor.sh
+        ./monitor.sh
