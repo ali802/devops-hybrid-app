@@ -1,0 +1,34 @@
+name: Continuous Integration (GitHub-Hosted)
+
+# Trigger this workflow every time someone pushes to the main branch
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    # This tells GitHub to run the job on their cloud-managed Ubuntu runner
+    runs-on: ubuntu-latest
+
+    steps:
+    # Step 1: Checkout the repository code onto the runner
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # Step 2: Set up Python on the cloud runner
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-state-file: false # Keeping it minimal
+
+    # Step 3: Test compilation of our Python app (Basic Lint check)
+    - name: Lint Application
+      run: |
+        python -m py_compile app.py
+        echo "Application syntax is valid!"
+
+    # Step 4: Test syntax of our monitoring bash script
+    - name: Lint Monitor Script
+      run: |
+        bash -n monitor.sh
+        echo "Monitoring script syntax is valid!"
