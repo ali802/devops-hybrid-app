@@ -1,34 +1,53 @@
 name: Continuous Integration (GitHub-Hosted)
 
-# Trigger this workflow every time someone pushes to the main branch
 on:
   push:
     branches: [ "main" ]
 
+# Grant permissions to allow the workflow to push images to GitHub Packages
+permissions:
+  packages: write
+  contents: read
+
 jobs:
   build-and-test:
-    # This tells GitHub to run the job on their cloud-managed Ubuntu runner
     runs-on: ubuntu-latest
 
     steps:
-    # Step 1: Checkout the repository code onto the runner
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # Step 2: Set up Python on the cloud runner
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-state-file: false # Keeping it minimal
-
-    # Step 3: Test compilation of our Python app (Basic Lint check)
     - name: Lint Application
       run: |
         python -m py_compile app.py
         echo "Application syntax is valid!"
 
-    # Step 4: Test syntax of our monitoring bash script
     - name: Lint Monitor Script
       run: |
         bash -n monitor.sh
         echo "Monitoring script syntax is valid!"
+
+    # --- NEW DOCKER STEPS ---
+    
+    # Step 3: Log in to GitHub Container Registry (GHCR)
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    # Step 4: Downcase repository name to ensure it works with Docker naming rules
+    - name: Downcase Repo Name
+      id: string
+      run: |
+        echo "repo_lower=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
+
+    # Step 5: Build and Push the Docker Image
+    - name: Build and Push Docker Image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          ghcr.io/${{ steps.string.outputs.repo_lower }}:latest
